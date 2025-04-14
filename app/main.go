@@ -7,21 +7,41 @@ import (
 	"strings"
 )
 
-var (
-	okStatus       = []byte("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
-	notFoundStatus = []byte("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n")
-)
-
 func handleConn(conn net.Conn) {
 	defer conn.Close()
 	buf := make([]byte, 1024)
 	_, err := conn.Read(buf)
-	if err != nil || !strings.HasPrefix(string(buf), "GET / HTTP/1.1") {
-		conn.Write(notFoundStatus)
+	if err != nil {
+		conn.Write([]byte("HTTP/1.1 404 Not Found\r\n"))
 		return
 	}
 
-	conn.Write(okStatus)
+	req := parseRequest(string(buf))
+
+	res := Response{}
+	res.version = req.version
+
+	if req.target == "/" {
+		res.code = 200
+		res.status = "OK"
+		conn.Write(seqResponse(res))
+		return
+	}
+
+	if strings.HasPrefix(req.target, "/echo/") {
+		res.code = 200
+		res.status = "OK"
+		res.resHeaders.contentType = "text/plain"
+		str := req.target[len("/echo/"):]
+		res.resHeaders.contentLength = len(str)
+		res.body = str
+		conn.Write(seqResponse(res))
+		return
+	}
+
+	res.code = 404
+	res.status = "Not Found"
+	conn.Write(seqResponse(res))
 }
 
 func main() {
