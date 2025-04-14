@@ -50,6 +50,28 @@ func handleConn(conn net.Conn) {
 		return
 	}
 
+	if strings.HasPrefix(req.target, "/files/") {
+		res.code = 200
+		res.status = "OK"
+		res.resHeaders.contentType = "application/octet-stream"
+
+		dir := os.Args[2]
+		path := req.target[len("/files/"):]
+
+		data, err := os.ReadFile(dir + path)
+		if err != nil {
+			res.code = 404
+			res.status = "Not Found"
+			conn.Write(seqResponse(res))
+			return
+		}
+
+		res.resHeaders.contentLength = len(data)
+		res.body = string(data)
+		conn.Write(seqResponse(res))
+		return
+	}
+
 	res.code = 404
 	res.status = "Not Found"
 	conn.Write(seqResponse(res))
