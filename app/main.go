@@ -39,6 +39,17 @@ func handleConn(conn net.Conn) {
 		return
 	}
 
+	if req.target == "/user-agent" {
+		res.code = 200
+		res.status = "OK"
+		res.resHeaders.contentType = "text/plain"
+		fmt.Println(req.reqHeaders.userAgent)
+		res.resHeaders.contentLength = len(req.reqHeaders.userAgent)
+		res.body = req.reqHeaders.userAgent
+		conn.Write(seqResponse(res))
+		return
+	}
+
 	res.code = 404
 	res.status = "Not Found"
 	conn.Write(seqResponse(res))
