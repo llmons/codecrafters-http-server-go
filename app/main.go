@@ -7,6 +7,71 @@ import (
 	"strings"
 )
 
+func handleGetReq(req Request) Response {
+	res := Response{}
+	res.version = req.version
+	res.code = 200
+	res.status = "OK"
+
+	switch req.target {
+	case "/":
+	case "/user-agent":
+		res.resHeaders.contentType = "text/plain"
+		res.resHeaders.contentLength = len(req.reqHeaders.userAgent)
+		res.body = req.reqHeaders.userAgent
+	default:
+		if strings.HasPrefix(req.target, "/echo/") {
+			res.resHeaders.contentType = "text/plain"
+			str := req.target[len("/echo/"):]
+			res.resHeaders.contentLength = len(str)
+			res.body = str
+		} else if strings.HasPrefix(req.target, "/files/") {
+			res.resHeaders.contentType = "application/octet-stream"
+
+			//  read the file from target directory
+			dir := os.Args[2]
+			path := req.target[len("/files/"):]
+			data, err := os.ReadFile(dir + path)
+			if err != nil {
+				res.code = 404
+				res.status = "Not Found"
+				return res
+			}
+
+			res.resHeaders.contentLength = len(data)
+			res.body = string(data)
+		} else {
+			res.code = 404
+			res.status = "Not Found"
+		}
+	}
+
+	return res
+}
+
+func handlePostReq(req Request) Response {
+	res := Response{}
+	res.version = req.version
+	res.code = 201
+	res.status = "Created"
+
+	if strings.HasPrefix(req.target, "/files/") {
+		// write the file to target directory
+		dir := os.Args[2]
+		path := req.target[len("/files/"):]
+		err := os.WriteFile(dir+path, []byte(req.body), 0644)
+		if err != nil {
+			res.code = 404
+			res.status = "Not Found"
+			return res
+		}
+	} else {
+		res.code = 404
+		res.status = "Not Found"
+	}
+	return res
+}
+
 func handleConn(conn net.Conn) {
 	defer conn.Close()
 	buf := make([]byte, 1024)
@@ -18,62 +83,13 @@ func handleConn(conn net.Conn) {
 
 	req := parseRequest(string(buf))
 
-	res := Response{}
-	res.version = req.version
-
-	if req.target == "/" {
-		res.code = 200
-		res.status = "OK"
-		conn.Write(seqResponse(res))
-		return
+	var res Response
+	switch req.method {
+	case "GET":
+		res = handleGetReq(req)
+	case "POST":
+		res = handlePostReq(req)
 	}
-
-	if strings.HasPrefix(req.target, "/echo/") {
-		res.code = 200
-		res.status = "OK"
-		res.resHeaders.contentType = "text/plain"
-		str := req.target[len("/echo/"):]
-		res.resHeaders.contentLength = len(str)
-		res.body = str
-		conn.Write(seqResponse(res))
-		return
-	}
-
-	if req.target == "/user-agent" {
-		res.code = 200
-		res.status = "OK"
-		res.resHeaders.contentType = "text/plain"
-		fmt.Println(req.reqHeaders.userAgent)
-		res.resHeaders.contentLength = len(req.reqHeaders.userAgent)
-		res.body = req.reqHeaders.userAgent
-		conn.Write(seqResponse(res))
-		return
-	}
-
-	if strings.HasPrefix(req.target, "/files/") {
-		res.code = 200
-		res.status = "OK"
-		res.resHeaders.contentType = "application/octet-stream"
-
-		dir := os.Args[2]
-		path := req.target[len("/files/"):]
-
-		data, err := os.ReadFile(dir + path)
-		if err != nil {
-			res.code = 404
-			res.status = "Not Found"
-			conn.Write(seqResponse(res))
-			return
-		}
-
-		res.resHeaders.contentLength = len(data)
-		res.body = string(data)
-		conn.Write(seqResponse(res))
-		return
-	}
-
-	res.code = 404
-	res.status = "Not Found"
 	conn.Write(seqResponse(res))
 }
 

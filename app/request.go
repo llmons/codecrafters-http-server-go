@@ -1,6 +1,9 @@
 package main
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+)
 
 type Request struct {
 	method     string
@@ -11,41 +14,56 @@ type Request struct {
 }
 
 type ReqHeaders struct {
-	host      string
-	userAgent string
-	accept    string
+	host          string
+	userAgent     string
+	accept        string
+	contentType   string
+	contentLength int
 }
 
 func parseRequest(req string) Request {
-	lines := strings.Split(req, "\r\n")
-	requestLine := lines[0]
-	tokens := strings.Split(requestLine, " ")
-	reqHeaders := lines[1:4]
-	body := lines[4:]
-
-	// Request line
 	request := Request{}
-	request.method = tokens[0]
-	request.target = tokens[1]
-	request.version = tokens[2]
+	lines := strings.Split(req, "\r\n")
 
-	// Headers
-	if len(reqHeaders[0]) > 0 {
-		request.reqHeaders.host = reqHeaders[0][len("Host: "):]
-	}
-	if len(reqHeaders[1]) > 0 {
-		request.reqHeaders.userAgent = reqHeaders[1][len("User-Agent: "):]
-	}
-	if len(reqHeaders[2]) > 0 {
-		request.reqHeaders.accept = reqHeaders[2][len("Accept: "):]
+	// request line
+	requestLine := lines[0]
+	parts := strings.Split(requestLine, " ")
+	request.method = parts[0]
+	request.target = parts[1]
+	request.version = parts[2]
+
+	// headers
+	reqHeaders := lines[1 : len(lines)-1]
+	mp := map[string]string{}
+	for _, header := range reqHeaders {
+		parts := strings.Split(header, ": ")
+		if len(parts) == 2 {
+			mp[parts[0]] = parts[1]
+		}
 	}
 
-	if len(body) == 0 {
-		return request
+	if val, ok := mp["Host"]; ok {
+		request.reqHeaders.host = val
+	}
+	if val, ok := mp["User-Agent"]; ok {
+		request.reqHeaders.userAgent = val
+	}
+	if val, ok := mp["Accept"]; ok {
+		request.reqHeaders.accept = val
+	}
+	if val, ok := mp["Content-Type"]; ok {
+		request.reqHeaders.contentType = val
+	}
+	if val, ok := mp["Content-Length"]; ok {
+		contentLength, err := strconv.Atoi(val)
+		if err == nil {
+			request.reqHeaders.contentLength = contentLength
+		}
 	}
 
-	// Body
-	request.body = body[0]
+	// body
+	body := lines[len(lines)-1:]
+	request.body = strings.Trim(body[0], "\x00")
 
 	return request
 }
